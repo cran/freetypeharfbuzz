@@ -1,0 +1,123 @@
+
+TARGET_DIR = $(CURDIR)/target
+BUILD_DIR = $(CURDIR)/build
+INST_DIR = $(CURDIR)
+TOOLS_DIR = $(CURDIR)/../tools
+
+
+FT_VERSION = 2.9
+HB_VERSION = 1.7.6
+
+FT = freetype-$(FT_VERSION)
+HB = harfbuzz-$(HB_VERSION)
+
+FT_BUILD_PATH = $(BUILD_DIR)/$(FT)
+HB_BUILD_PATH = $(BUILD_DIR)/$(HB)
+
+FT_LIB = $(TARGET_DIR)/lib/libfreetype.a
+HB_LIB = $(TARGET_DIR)/lib/libharfbuzz.a
+
+FREETYPE_CFLAGS = -I$(TARGET_DIR)/include/freetype2
+FREETYPE_LIBS = -L$(TARGET_DIR)/lib -lfreetype
+FREETYPE_STATIC_LIB = ${TARGET_DIR}/lib/libfreetype.a
+
+HARFBUZZ_STATIC_LIB = ${TARGET_DIR}/lib/libharfbuzz.a
+
+
+PKG_CPPFLAGS  = \
+	-I$(TARGET_DIR)/include/harfbuzz \
+	-I$(TARGET_DIR)/include/freetype2
+
+PKG_LIBS = \
+	$(HARFBUZZ_STATIC_LIB) \
+	$(FREETYPE_STATIC_LIB) \
+	-fPIC
+
+ARCHIVES = \
+	$(TOOLS_DIR)/$(FT)-vanilla.tar.gz \
+	$(TOOLS_DIR)/$(HB)-vanilla.tar.gz \
+	$(TOOLS_DIR)/$(HB)-patched.tar.gz
+
+
+.PHONY: all
+all: $(FT_LIB) $(HB_LIB) | $(SHLIB) autoclean
+
+
+$(SHLIB): string-info.c r-interface.c freetype.c utf8.c init.c \
+	$(FT_LIB) $(HB_LIB)
+
+
+$(FT_LIB): $(FT_BUILD_PATH)
+	export CFLAGS="$(CFLAGS) -g0" && \
+	cd $(BUILD_DIR)/freetype-$(FT_VERSION) && \
+		./configure \
+			--prefix=$(TARGET_DIR) \
+			--enable-static=yes \
+			--with-pic=yes \
+			--without-zlib \
+			--without-bzip2 \
+			--without-png \
+			--without-harfbuzz && \
+		$(MAKE) && \
+		$(MAKE) install
+
+$(FT_BUILD_PATH): $(ARCHIVES)
+	mkdir -p $(BUILD_DIR) && \
+		cd $(BUILD_DIR) && \
+		$(TOOLS_DIR)/untar.sh $(TOOLS_DIR)/$(FT)-vanilla.tar.gz
+
+
+# Export FreeType flags explicitly for working around pkg-config
+$(HB_LIB): $(FT_LIB) $(HB_BUILD_PATH)
+	export CFLAGS="$(CFLAGS) -g0" && \
+	export LDFLAGS="$(FREETYPE_LIBS) $(LDFLAGS)" && \
+	export CPPFLAGS="$(FREETYPE_CFLAGS) $(CPPFLAGS)" && \
+	cd $(BUILD_DIR)/harfbuzz-$(HB_VERSION) && \
+		{ \
+			./configure \
+				--prefix=$(TARGET_DIR) \
+				--enable-static=yes \
+				--with-pic=yes \
+				--with-freetype=yes \
+				--without-icu \
+				--without-cairo \
+				--without-fontconfig \
+				--without-glib; \
+			(cp config.log "$(CURDIR)/../tests/harfbuzz-config.log.Rout.fail") \
+		} && \
+		{ \
+			echo "#undef HAVE_FT_DONE_MM_VAR" >> config.h; \
+			echo "#undef HAVE_FT_GET_VAR_BLEND_COORDINATES" >> config.h; \
+			echo "#undef HAVE_FT_SET_VAR_BLEND_COORDINATES" >> config.h; \
+		} && \
+		$(MAKE) V=0 && \
+		$(MAKE) install &> /dev/null
+
+$(HB_BUILD_PATH): $(ARCHIVES)
+	mkdir -p $(BUILD_DIR) && \
+		cd $(BUILD_DIR) && \
+		$(TOOLS_DIR)/untar.sh $(TOOLS_DIR)/$(HB)-patched.tar.gz;
+
+$(ARCHIVES):
+	cd $(TOOLS_DIR) && $(MAKE)
+
+
+.PHONY: clean
+clean:
+	rm -rf $(FT)* $(HB)* $(BUILD_DIR) $(TARGET_DIR) \
+		"../tests/harfbuzz-config.log.Rout.fail"
+
+.PHONY: distclean
+distclean: clean
+	rm -rf *.so *.o
+
+.PHONY: autoclean
+autoclean: $(SHLIB)
+	@if [ ! -e not-cran ]; then \
+		$(MAKE) -f Makevars clean; \
+	fi
+
+
+# Use this to print an envvar:
+# make -f Makevars print-ENVVAR
+print-%: ; @echo $* = $($*)
