@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+# We sed in SRC_DIR because Solaris `make` doesn't set SRC_DIR
+SRC_DIR="`pwd`"
+SED="sed -e s|@SRC_DIR@|${SRC_DIR}/src|"
+
+# Set FTHB_BUILD to force a full build
+if [ -n "$FTHB_BUILD" ]; then
+    MK_FILE="Makebuild"
+elif [ $(uname) = Darwin ]; then
+    MK_FILE="Makestatic"
+    sed -e "s|@STATIC_FILE@|fthb-apple-static.tar.gz|" src/Makestatic.in > src/Makestatic
+elif [ $(uname) = LinuxDisabledForNow ] && [ $(arch) = x86_64 ]; then
+    MK_FILE="Makestatic"
+    sed -e "s|@STATIC_FILE@|fthb-linux-static.tar.gz|" src/Makestatic.in > src/Makestatic
+else
+    MK_FILE="Makebuild"
+fi
+
+if [ $(uname) = SunOS ]; then
+    C99_FLAG="-xc99"
+    CXX_FLAG=""
+else
+    C99_FLAG="-std=c99"
+    CXX_FLAG="-std=c++11"
+fi
+
+${SED} -e "s|@C99_FLAG@|$C99_FLAG|" \
+       -e "s|@CXX_FLAG@|$CXX_FLAG|" \
+       -e "s|@MK_FILE@|$MK_FILE|" \
+       src/Makevars.in > src/Makevars
+
+mkdir -p src/target

@@ -1,4 +1,6 @@
 
+FTHB_VERSION = 0.2.4
+
 FT_VERSION ?= 2.9
 HB_VERSION ?= 1.7.6
 
@@ -7,17 +9,20 @@ HB = harfbuzz-$(HB_VERSION)
 
 
 .PHONY: all
-all: $(FT)-vanilla.tar.gz $(HB)-vanilla.tar.gz $(HB)-patched.tar.gz
+all: $(FT)-patched.tar.gz $(HB)-patched.tar.gz
 
 
 $(FT)-vanilla.tar.gz:
-	./download.sh "https://github.com/lionel-/freetypeharfbuzz/raw/v0.0.1/tools/$(FT)-vanilla.tar.gz" $(FT)-vanilla.tar.gz
+	./download.sh "https://github.com/lionel-/freetypeharfbuzz/raw/v$(FTHB_VERSION)/tools/$(FT)-vanilla.tar.gz" $(FT)-vanilla.tar.gz
+
+$(FT)-patched.tar.gz:
+	./download.sh "https://github.com/lionel-/freetypeharfbuzz/raw/v$(FTHB_VERSION)/tools/$(FT)-patched.tar.gz" $(FT)-patched.tar.gz
 
 $(HB)-vanilla.tar.gz:
-	./download.sh "https://github.com/lionel-/freetypeharfbuzz/raw/v0.0.1/tools/$(HB)-vanilla.tar.gz" $(HB)-vanilla.tar.gz
+	./download.sh "https://github.com/lionel-/freetypeharfbuzz/raw/v$(FTHB_VERSION)/tools/$(HB)-vanilla.tar.gz" $(HB)-vanilla.tar.gz
 
 $(HB)-patched.tar.gz:
-	./download.sh "https://github.com/lionel-/freetypeharfbuzz/raw/v0.0.1/tools/$(HB)-patched.tar.gz" $(HB)-patched.tar.gz
+	./download.sh "https://github.com/lionel-/freetypeharfbuzz/raw/v$(FTHB_VERSION)/tools/$(HB)-patched.tar.gz" $(HB)-patched.tar.gz
 
 
 .PHONY: tarballs
@@ -25,14 +30,33 @@ tarballs: tarballs-freetype tarballs-harfbuzz
 
 .PHONY: tarballs-freetype
 tarballs-freetype:
-	./download.sh "https://download.savannah.gnu.org/releases/freetype/$(FT).tar.gz" $(FT)-vanilla.tar.gz
+	./download.sh "https://download.savannah.gnu.org/releases/freetype/$(FT).tar.gz" $(FT)-vanilla.tar.gz && \
+	tar -xf $(FT)-vanilla.tar.gz $(FT) && \
+	(cd $(FT) && \
+		patch -p1 < ../diffs/freetype/0001-Remove-pragma-diagnostics.patch && \
+		patch -p1 < ../diffs/freetype/0002-Remove-amiga-files.patch \
+	) && \
+	tar -zcf $(FT)-patched.tar.gz $(FT) && \
+	$(MAKE) clean
 
 .PHONY: tarballs-harfbuzz
 tarballs-harfbuzz:
 	./download.sh "https://github.com/harfbuzz/harfbuzz/releases/download/1.7.6/"$(HB).tar.bz2 $(HB).tar.bz2 && \
 	tar -xf $(HB).tar.bz2 && \
 	tar -zcf $(HB)-vanilla.tar.gz $(HB) && \
-	(cd $(HB) && patch < ../diffs/harfbuzz-pkgconfig.diff) && \
+	(cd $(HB) && \
+		patch -p1 < ../diffs/0001-Undefine-HB_PRINTF_FUNC.patch && \
+		patch -p1 < ../diffs/0002-Remove-unnecessary-trailing-semi-colon.patch && \
+		patch -p1 < ../diffs/0003-Initialise-offsets.patch && \
+		patch -p1 < ../diffs/0004-Cast-to-void-before-memset.patch && \
+		patch -p1 < ../diffs/0005-Silence-gcc-warning.patch && \
+		patch -p1 < ../diffs/0006-Remove-flags-causing-warnings-on-Solaris.patch && \
+		patch -p1 < ../diffs/0007-Silence-Solaris-warnings-about-symbol-hiding.patch && \
+		aclocal && \
+		NOCONFIGURE=true ./autogen.sh && \
+		patch < ../diffs/harfbuzz-flag.diff && \
+		patch < ../diffs/harfbuzz-pkgconfig.diff \
+	) && \
 	tar -zcf $(HB)-patched.tar.gz $(HB) && \
 	$(MAKE) clean
 
@@ -45,6 +69,7 @@ clean:
 distclean: clean
 	rm -rf \
 		$(FT)-vanilla.tar.gz \
+		$(FT)-patched.tar.gz \
 		$(HB)-vanilla.tar.gz \
 		$(HB)-patched.tar.gz
 
