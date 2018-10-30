@@ -8,16 +8,22 @@ HB_ARCHIVE = $(TOOLS_DIR)/$(HB)-patched.tar.gz
 ARCHIVES = $(FT_ARCHIVE) $(HB_ARCHIVE)
 
 
+# Fixes linker error on Solaris
+override SHLIB_LD = $(CXX)
+
+
 $(FT_ARCHIVE):
 	cd $(TOOLS_DIR) && $(MAKE)
 
 FT_CFLAGS = -DNDEBUG -g0 $(C99_FLAG) $(CFLAGS)
 
-$(FT_STATIC_LIB): $(FT_ARCHIVE)
+$(FT_BUILD_DIR): $(FT_ARCHIVE)
 	mkdir -p $(BUILD_DIR) && \
 	cd $(BUILD_DIR) && \
-	$(TOOLS_DIR)/untar.sh $(TOOLS_DIR)/$(FT)-patched.tar.gz && \
-	cd freetype-$(FT_VERSION) && \
+	$(TOOLS_DIR)/untar.sh $(TOOLS_DIR)/$(FT)-patched.tar.gz
+
+$(FT_STATIC_LIB): $(FT_BUILD_DIR)
+	cd $(BUILD_DIR)/freetype-$(FT_VERSION) && \
 	AR="$(AR)"		&& export AR && \
 	CC="$(CC)"		&& export CC && \
 	CFLAGS="$(FT_CFLAGS)"	&& export CFLAGS && \
@@ -43,7 +49,7 @@ $(HB_BUILD_DIR): $(FT_ARCHIVE)
 	$(TOOLS_DIR)/untar.sh $(TOOLS_DIR)/$(HB)-patched.tar.gz
 
 HB_CFLAGS = -I$(TARGET_DIR)/include/freetype2 -DNDEBUG -g0 $(C99_FLAG) $(CFLAGS)
-HB_CXXFLAGS = -I$(TARGET_DIR)/include/freetype2 -DNDEBUG -g0 $(CXX_FLAG) $(CXXFLAGS)
+HB_CXXFLAGS = -I$(TARGET_DIR)/include/freetype2 -DNDEBUG -g0 $(CXXFLAGS)
 HB_LDFLAGS = -L$(TARGET_DIR)/lib $(LDFLAGS) -lfreetype $(LDFLAGS)
 
 $(HB_STATIC_LIB): $(FT_STATIC_LIB) $(HB_BUILD_DIR)
